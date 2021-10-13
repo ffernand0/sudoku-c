@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 
 /*
@@ -20,20 +21,38 @@
 
 /* Declaracion de tipos de dato personalizados */
 
+typedef struct nodo {
+    int numero;
+    struct nodo * siguiente;
+}tNumero;
 
 typedef int tArray[N];
 typedef struct {
     tArray posicion[N];
 } tTablero;
 
+typedef struct {
+	int cantFacil;
+	int cantIntermedio;
+	int cantDificil;
+}tDif;
+
+typedef struct {
+	int dificultad; // 1=FACIL - 2=INTERMEDIO - 3=DIFICIL
+}tStats;
+
+
 /*PROTOTIPADO*/
+void inicializarDatos();
+void actualizarStats();
 void abrirOCrearArchivo();
 void mostrarImagenInicio();
 void finalizarProceso();
+void mostrarEstadisticas();
 void ingresarDificultad();
 void ingresarDatosSudoku();
 void grabarRegistroSudoku();
-void ingresarRespuesta();
+char ingresarRespuesta();
 void ingresarFilaSudoku();
 void mostrarFila();
 void mostrarSudoku(int tablero[N][N],int);
@@ -42,7 +61,17 @@ void jugarGuardados();
 void leerOpcion(int );
 void mostrarMenu();
 void borrarSudoku();
-void comprobarSiExisteArchivo(const char *);
+void comprobarSiExisteArchivo1(const char *);
+void comprobarSiExisteArchivo2(const char *);
+
+void inicializarLista();
+bool listaVacia(tNumero *);
+void ingresarAdelante(int);
+void agregarNumero(int);
+void elegirNumeroEliminar(int pContador);
+void grabarNumerosASudoku();
+void modificarNumFila();
+void grabarStats();
 
 /*PROTOTIPADO VALIDADOR*/
 int esCorrecto(int tablero[N][N], int, int, int);
@@ -51,15 +80,20 @@ int resuelveSudoku(int tablero[N][N], int, int);
 
 /*Declaracion de variables*/
 tTablero vSudoku; /*Declaracion del registro vSudoku tipo tTablero*/
+tStats regStats; /*Declaracion del registro regStats tipo tStats*/
 FILE * fSudoku; /* Declaracion del archivo, puntero a la zona de memoria donde se va a iniciar la transferencia*/
+FILE * fStats; /* Declaracion del archivo, donde se va almacenar el registro de juegos y su dificultad*/
+
+tNumero * primerFila;
 
 char respuesta;
 int dificultad;
+tDif cantDificultad;
 
 /*Funcion principal*/
 int main() {
-    mostrarImagenInicio();
-    abrirOCrearArchivo();
+    //mostrarImagenInicio();
+    inicializarDatos();
     mostrarMenu();
     return 0;
 }
@@ -67,14 +101,46 @@ int main() {
 
 /*Declaracion de funciones*/
 
-void abrirOCrearArchivo() {  /* Se declara un puntero archivo con el nombre de nuestro archivo binario principal */
-    char *fileName = "Sudoku.dat";
-
-    comprobarSiExisteArchivo(fileName);
-    system("pause");
+void inicializarDatos(){
+	abrirOCrearArchivo();
+	actualizarStats();
 }
 
-void comprobarSiExisteArchivo(const char *nombreArchivo) { /* Validamos si existe el archivo mediante la funcion access() */
+
+void actualizarStats(){
+	fStats = fopen("Stats.dat", "rb");
+	fread(&regStats, sizeof(tStats), 1, fStats);
+	while(!feof(fStats)){
+		switch(regStats.dificultad){
+			case 1:{
+				cantDificultad.cantFacil++;
+				break;
+			}
+			case 2:{
+				cantDificultad.cantIntermedio++;
+				break;
+			}
+			case 3:{
+				cantDificultad.cantDificil++;
+				break;
+			}
+		}
+		fread(&regStats, sizeof(tStats), 1, fStats);
+	}
+	fclose(fStats);
+}
+
+void abrirOCrearArchivo() {  /* Se declara un puntero archivo con el nombre de nuestro archivo binario principal */
+    char *fileName = "Sudoku.dat";
+    char *failName = "Stats.dat";
+
+    comprobarSiExisteArchivo1(fileName);
+    sleep(1);
+    comprobarSiExisteArchivo2(failName);
+    sleep(1);
+}
+
+void comprobarSiExisteArchivo1(const char *nombreArchivo) { /* Validamos si existe el archivo mediante la funcion access() */
 
     if ( !access(nombreArchivo, F_OK )) {
         printf("\n\tEl archivo %s ha sido encontrado\n\n\t", nombreArchivo);
@@ -85,13 +151,24 @@ void comprobarSiExisteArchivo(const char *nombreArchivo) { /* Validamos si exist
     }
 }
 
-void leerArchivo() {
-    fSudoku = fopen("Sudoku.dat", "rb"); //rb modo apertura de archivo que indica solo lectura
-    if (fSudoku == NULL) {
-        printf("Ocurrio un error al leer el archivo\n");
+void comprobarSiExisteArchivo2(const char *nombreArchivo) { /* Validamos si existe el archivo mediante la funcion access() */
+
+    if ( !access(nombreArchivo, F_OK )) {
+        printf("\n\tEl archivo %s ha sido encontrado\n\n\t", nombreArchivo);
     }else {
-        printf( "\n\tArchivo de tableros Sudoku leido de forma correcta! \n" );
+        printf("\n\tEl archivo %s no existe\n\n\t", nombreArchivo);
+        fStats = fopen("Stats.dat", "wb");
+        printf("\n\tSe ha creado con exito\n\n\n");
     }
+}
+
+
+void inicializarLista(){
+    primerFila=NULL;
+}
+
+bool listaVacia(tNumero * primerFila){
+    return(primerFila==NULL);
 }
 
 void mostrarImagenInicio() {    /*  Imagen con el nombre de nuestro grupo */
@@ -122,11 +199,12 @@ void mostrarMenu() {  /* Menu principal de nuestro programa */
     printf("\n\t\t\t||\t\t\t\t\t\t\t\t||");
     printf("\n\t\t\t||\tSeleccione una opcion para continuar\t\t\t||");
     printf("\n\t\t\t||-------------------------------------------------------------\t||");
-    printf("\n\t\t\t||\t1 Instrucciones del juego  \t\t\t\t||");
-    printf("\n\t\t\t||\t2 Generar tablero \t\t\t\t\t||");
-    printf("\n\t\t\t||\t3-Juegos guardados\t\t\t\t\t||");
-    printf("\n\t\t\t||\t4-Borrar un Sudoku\t\t\t\t\t||");
-    printf("\n\t\t\t||\t5-Salir\t\t\t\t\t\t\t||");
+    printf("\n\t\t\t||\t[1] Instrucciones del juego  \t\t\t\t||");
+    printf("\n\t\t\t||\t[2] Generar tablero \t\t\t\t\t||");
+    printf("\n\t\t\t||\t[3] Juegos guardados\t\t\t\t\t||");
+    printf("\n\t\t\t||\t[4] Borrar un Sudoku\t\t\t\t\t||");
+    printf("\n\t\t\t||\t[5] Estadisticas de Juego\t\t\t\t||");
+    printf("\n\t\t\t||\t[6] Salir\t\t\t\t\t\t||");
     printf("\n\t\t\t||-------------------------------------------------------------\t||");
     printf("\n\t\t\t  \t*OPCION: ");
     scanf("%i", &opc);
@@ -154,6 +232,11 @@ void leerOpcion(int pOpc) {
             break;
         }
         case 5: {
+            mostrarEstadisticas();
+            mostrarMenu();
+            break;
+        }
+        case 6: {
             printf("\n\n\n\t\tMuchas gracias por jugar, esperamos que te haya gustado!\n\n\n\t");
             system("pause");
             exit(0);
@@ -173,7 +256,40 @@ void leerRegistroSudoku() {    /* se lee de a un tablero sudoku a la vez */
     printf("\tRegistro de solucion de sudoku leido! \n");
 }
 
-
+void mostrarEstadisticas(){
+	fStats = fopen("Stats.dat", "rb");
+	fread(&regStats, sizeof(tStats), 1, fStats);
+	cantDificultad.cantFacil=0;
+	cantDificultad.cantIntermedio=0;
+	cantDificultad.cantDificil=0;
+	while(!feof(fStats)){
+		switch(regStats.dificultad){
+			case 1:{ 				// 1 = FACIL
+				cantDificultad.cantFacil++;
+				break;
+			}
+			case 2:{				// 2 = INTERMEDIO
+				cantDificultad.cantIntermedio++;
+				break;
+			}
+			case 3:{				// 3 = DIFICIL
+				cantDificultad.cantDificil++;
+				break;
+			}
+		}
+		fread(&regStats, sizeof(tStats), 1, fStats);
+	}
+	fclose(fStats);
+	system("cls");
+	printf("\n\n\t***ESTADISTICAS DEL JUEGO***");
+	printf("\n\n\tCANTIDAD DE JUEGOS JUGADOS");
+	printf("\n\n\n\tDificultad\tCantidad");
+	printf("\n\tFACIL\t\t    %d",cantDificultad.cantFacil);
+	printf("\n\tINTERMEDIO\t    %d",cantDificultad.cantIntermedio);
+	printf("\n\tDIFICIL\t\t    %d",cantDificultad.cantDificil);
+	printf("\n\n\n\t");
+	system("pause");
+}
 
 void mostrarInstrucciones() {  /* muestra las reglas del juego */
     printf("\n\n\t\tInstrucciones del juego:\n\n");
@@ -211,31 +327,48 @@ void ingresarDificultad() {  /* se ingresa la dificulad del tablero */
         default: {
             printf("\t***ERROR***");
             printf("\tOpcion ingresada incorrecta\n\n\t");
-            ingresarDificultad();  /* Recursividad */
+            system("pause");
+            //ingresarDificultad();  /* Recursividad */
         }
     }
 }
+
+void grabarStats(){
+	int i;
+	fStats = fopen("Stats.dat", "wb");
+	for (i=1;i<=cantDificultad.cantFacil;i++){
+		regStats.dificultad=1;
+		fwrite(&regStats, sizeof(tStats), 1, fStats);
+	}
+	for (i=1;i<=cantDificultad.cantIntermedio;i++){
+		regStats.dificultad=2;
+		fwrite(&regStats, sizeof(tStats), 1, fStats);
+	}
+	for (i=1;i<=cantDificultad.cantDificil;i++){
+		regStats.dificultad=3;
+		fwrite(&regStats, sizeof(tStats), 1, fStats);
+	}
+	fclose(fStats);
+}
+
 
 void ingresarDatosSudoku() { /*se ingresa la primer linea del tablero, muestra en pantalla y pregunta al usuario si son correctos los datos */
     fSudoku = fopen("Sudoku.dat", "ab");
     respuesta = 'a';
     printf("\nIngrese la primer fila para generar el sudoku: \n");
-
-    while (respuesta != 'S') {
-        ingresarFilaSudoku();
-        mostrarFila();
-        ingresarRespuesta();
-    }
+    ingresarFilaSudoku();
 
     if (resuelveSudoku(vSudoku.posicion, 0, 0) == 1) { /* si lo ingresado es correcto se resuelve el sudoku, se graba en el archivo, se cierra el mismo y vuelve al menu*/
-        printf("sudoku creado exiosamente!!\n");
+        printf("\tSudoku creado exiosamente!!\n");
         grabarRegistroSudoku();
         finalizarProceso();
         system("pause");
         mostrarMenu();
     }else {
-        printf("No tiene solucion"); /* los datos ingresados eran incorrectos, se cierra el archivo */
+        printf("\tNo tiene solucion"); /* los datos ingresados eran incorrectos, se cierra el archivo */
         finalizarProceso();
+        system("pause");
+        mostrarMenu();
     }
 }
 
@@ -243,22 +376,23 @@ void ingresarDatosSudoku() { /*se ingresa la primer linea del tablero, muestra e
 void jugarGuardados() { /* carga archivo en modo lectura y muestra sub menu */
     fSudoku = fopen("Sudoku.dat", "rb");
     ingresarDificultad();
+    leerRegistroSudoku();
     while (!feof (fSudoku)){
-        leerRegistroSudoku();
         mostrarSudoku(vSudoku.posicion, dificultad);
-        printf("\n\n\t[a] Siguiente Sudoku");
-        printf("\n\t[b] Cambiar dificultad de este Sudoku");
-        printf("\n\t[c] Mostrar solucion del sudoku");
-        printf("\n\t[d] Volver al menu principal\n");
-        ingresarRespuesta();
+        printf("\n\n\t[A] Siguiente Sudoku");
+        printf("\n\t[B] Cambiar dificultad de este Sudoku");
+        printf("\n\t[C] Mostrar solucion del sudoku");
+        printf("\n\t[D] Volver al menu principal\n");
+        printf("\n\tOPCION: ");
+        respuesta = ingresarRespuesta();
         switch (respuesta) {
             case 'A': {
+            	leerRegistroSudoku();
                 system("cls");
                 break;
             }
             case 'B': {
                 ingresarDificultad();
-                mostrarSudoku(vSudoku.posicion, dificultad);
                 break;
             }
             case 'C': {
@@ -289,37 +423,184 @@ void jugarGuardados() { /* carga archivo en modo lectura y muestra sub menu */
     mostrarMenu();
 }
 
-void ingresarFilaSudoku() {  /*Ingreso de datos por teclado de la primer fila del sudoku a generar */
-    int i, j;
-    printf("Ingrese la Fila %d\n", 1);
-    for (i = 0; i <= N - 1; i++) {
-        do {
-            printf("Num %d: ", i + 1);
-            scanf("%d", &vSudoku.posicion[0][i]);
-        } while (vSudoku.posicion[0][i] < 0 || vSudoku.posicion[0][i] > 9);
-    }
-
-    /* Completa el resto de las filas con 0 para que el programa valide y encuentre una solucion */
-    for (i = 1; i <= N - 1; i++) {
-        for (j = 0; j <= N - 1; j++) {
-            vSudoku.posicion[i][j] = 0;
+void ingresarFilaSudoku(){
+	inicializarLista();
+    system("cls");
+    int bandera;
+    bandera=0;
+    char respuesta2;
+    int contador,numero,i;
+    contador=0;
+    printf("\n\n\tINGRESO DE NUMEROS DE LA PRIMERA FILA\n\n");
+    //pedir al usuario que decida ingresar mas numeros o no
+    respuesta2='S';
+    respuesta='N';
+    while(respuesta!='S'){ //una respuesta que responda a que si los datos son correctos, para así grabar en el sudoku
+        while(respuesta2=='S'){
+        	if(bandera==0){
+        		printf("\tIngrese primer numero: ");
+        		bandera=1;
+        	}else{
+        		printf("\tIngrese N%c: ",167);
+        	}
+            scanf("%d",&numero);
+            contador=contador+1;
+            if (listaVacia(primerFila)){
+                ingresarAdelante(numero);
+            }else{
+                agregarNumero(numero);
+            }
+            mostrarFila();
+            printf("\n\tDesea ingresar mas numeros? S/N");
+            respuesta2 = ingresarRespuesta();
+            system("cls");
+        }
+        while(contador!=9){
+            if(contador<9){
+                for(i=contador+1;i<=9;i++){
+                    agregarNumero(0);
+                    contador=contador+1;
+                }
+            }else{
+                elegirNumeroEliminar(contador); //llama a la funcion para eliminar un numero ingresado
+                contador = contador-1;
+            }
+        }
+        while(respuesta!='S'){
+        	system("cls");
+        	printf("\n\tLos datos son correctos para grabar en el sudoku? [S/N]\n\n");
+        	mostrarFila();
+        	printf("\n\tRespuesta: ");
+        	respuesta = ingresarRespuesta();
+        	if (respuesta=='N'){
+				modificarNumFila();
+        	}
         }
     }
+    grabarNumerosASudoku();
 }
+
+
+void modificarNumFila(){
+	int i,posNumEliminar,numNuevo;
+	system("cls");
+	printf("\n\tIngrese posicion numero a modificar\n\n\tPosicion: ");
+	mostrarFila();
+	scanf("%d",&posNumEliminar);
+	printf("\n\tIngrese el nuevo valor: ");
+	scanf("%d",&numNuevo);
+	tNumero * aux;
+	aux=primerFila;
+	if(posNumEliminar==1){
+		aux->numero=numNuevo;
+	}else{
+		for (i=1;i< (posNumEliminar);i++){
+			aux=aux->siguiente;
+		}
+		aux->numero=numNuevo;
+	}
+}
+
+
+void grabarNumerosASudoku(){
+	int i;
+	tNumero * nodoEliminar;
+	//TENGO QUE HACER 2 COSAS:
+	// 1.- Recorrer la lista para ir guardando en el ARRAY del sudoku
+	// 2.- Recorrer la primer fila del ARRAY del sudoku para ir guardando lo que se lee de la lista
+	for (i=0;i<=N-1;i++){
+			//leer un numero de la lista, y copiarlo en la posición i del array
+			vSudoku.posicion[0][i]=primerFila->numero;
+			nodoEliminar=primerFila;
+			primerFila=primerFila->siguiente;
+			free(nodoEliminar);
+			nodoEliminar=NULL;			
+	}
+	system("pause");
+}
+
+
+
+void elegirNumeroEliminar(int pContador){
+	system("cls");
+	printf("\n\tCHEEEE INGRESASTE MUCHOS NUMEROS, BORRA ALGUNOS!\n");
+	int pos,i;
+	printf("\n\n\tElija la posicion del numero que quiere quitar [1-%d]",pContador);
+	mostrarFila();
+	printf("\n\n\tPosicion: ");
+	scanf("%d",&pos);
+	tNumero * aux;
+	tNumero * numAEliminar;
+	numAEliminar=(tNumero *) malloc (sizeof(tNumero));
+	aux=primerFila;
+	if(pos==1){
+		numAEliminar=primerFila;
+		primerFila=primerFila->siguiente;
+	}else{
+		for (i=1;i< (pos-1);i++){
+			aux=aux->siguiente;
+		}
+		numAEliminar=aux->siguiente;
+		aux->siguiente=numAEliminar->siguiente;
+	}
+	printf("\n\tSe ha quitado el numero: ");
+	printf("%d\n",numAEliminar->numero);
+	system("pause");
+	free(numAEliminar);
+	numAEliminar=NULL;
+}
+
+
+void ingresarAdelante(int pNumero){
+    tNumero * nuevoNodo;
+    nuevoNodo = (tNumero*) malloc (sizeof(tNumero));
+    nuevoNodo->numero=pNumero;
+    nuevoNodo->siguiente=primerFila;
+    primerFila=nuevoNodo;
+    printf("\n\n\tNumero %d ingresado",nuevoNodo->numero);
+}
+
+
+void agregarNumero(int pNumero){
+    tNumero * nuevoNodo;
+    tNumero * aux;
+    aux=primerFila;
+    nuevoNodo = (tNumero*) malloc (sizeof(tNumero));
+    nuevoNodo->numero=pNumero;
+    while(aux->siguiente!=NULL){
+        aux=aux->siguiente;
+    }
+    nuevoNodo->siguiente=aux->siguiente;
+    aux->siguiente=nuevoNodo;
+    printf("\n\n\tNumero %d ingresado",nuevoNodo->numero);
+}
+
 
 void mostrarFila() {  /* se muestra en pantalla los numeros ingresados y el usuario valida si son correctos */
-    int i;
-    for (i = 0; i <= N-1; i++) {
-        printf("%d ", vSudoku.posicion[0][i]);
+    tNumero * aux;
+    aux=primerFila;
+    printf("\n\t");
+    int contador;
+    contador=1;
+    while(aux!=NULL){
+        printf("[%d]\t",contador);
+        aux=aux->siguiente;
+        contador++;
     }
-    printf("\nLa fila es correcta? S/N\n");
+    printf("\n\t");
+    aux=primerFila;
+    while(aux!=NULL){
+        printf(" %d\t",aux->numero);
+        aux=aux->siguiente;
+    }
 }
 
-void ingresarRespuesta() {  /* lee opcion de usuario y la convierte a mayuscula */
+char ingresarRespuesta() {  /* lee opcion de usuario y la convierte a mayuscula */
     fflush(stdin);
-    printf("\n\t\t");
-    scanf("%c", &respuesta);
-    respuesta = toupper(respuesta);
+    char pRespuesta;
+    scanf("%c", &pRespuesta);
+    pRespuesta = toupper(pRespuesta);
+    return pRespuesta;
 }
 
 
@@ -399,7 +680,6 @@ void borrarSudoku() {
     int numSudoku, aux;
     tTablero vr_temporal;
     numSudoku = 0;
-    leerArchivo();
     while ( !feof (fSudoku) ) {
         leerRegistroSudoku();
         numSudoku++;
@@ -408,7 +688,7 @@ void borrarSudoku() {
         printf("\n\tSudoku nro. %d", numSudoku);
         printf("\n\n\tDesea borrar este sudoku? S/N\n\n\t");
         printf("Opcion: ");
-        ingresarRespuesta();
+        respuesta = ingresarRespuesta();
         switch (respuesta) {
             case 'S': {
                 break;
@@ -454,7 +734,31 @@ void borrarSudoku() {
 
 
 /* Imprime el tablero */
-void mostrarSudoku(int tablero[N][N], int pDificultad) {
+void mostrarSudoku(int tablero[N][N], int dificultad) {
+	
+	switch (dificultad) {
+        case 80: {
+            cantDificultad.cantFacil=cantDificultad.cantFacil+1;
+            //se guarda en el archivo que se jugó 1 juego mas en
+            //dificultad FACIL
+            break;
+        }
+        case 60: {
+            cantDificultad.cantIntermedio=cantDificultad.cantIntermedio+1;
+            //se guarda en el archivo que se jugó 1 juego mas en
+            //dificultad INTERMEDIO
+            break;
+        }
+        case 40: {
+            cantDificultad.cantDificil=cantDificultad.cantDificil+1;
+            //se guarda en el archivo que se jugó 1 juego mas en
+            //dificultad DIFICIL
+            break;
+        }
+    }
+	
+	grabarStats();
+	
     system("cls");
     int i, j, cantTope, cantNum = 0;
     cantTope = 100 - dificultad;
@@ -480,7 +784,7 @@ void mostrarSudoku(int tablero[N][N], int pDificultad) {
             printf("%c", 186);
         }
         for (j = 0; j <= 8; j++) {  /* Dependiendo el valor de dificultad oculta ciertos valores para poder jugar  */
-            if ( (rand() % 100) > pDificultad && cantNum < cantTope) {
+            if ( (rand() % 100) > dificultad && cantNum < cantTope) {
                 printf(" %c", 254);
                 cantNum++;
             } else {
@@ -530,6 +834,12 @@ void mostrarSudoku(int tablero[N][N], int pDificultad) {
     }
     printf("\n\t  1 2 3      4 5 6      7 8 9");
     printf("\n\n\n\t");
+    
+    
+    printf("FACIL %d\n",cantDificultad.cantFacil);
+    printf("INTERMEDIO %d\n",cantDificultad.cantIntermedio);
+    printf("DIFICIL %d\n",cantDificultad.cantDificil);
+    printf("\n\n\n\t");
 }
 
 void grabarRegistroSudoku() {
@@ -539,7 +849,6 @@ void grabarRegistroSudoku() {
     mostrarSudoku(vSudoku.posicion, dificultad);
     printf("\tRegistro de la solucion del sudoku guardado! \n");
 }
-
 
 void finalizarProceso() {
     fclose(fSudoku); /* Se cierra el archivo */
